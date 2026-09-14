@@ -376,7 +376,9 @@ ordinary local repository or provider tools.
 v1 SHOULD include:
 
 - multiple local projects/workspaces
-- Claude Code provider
+- Claude Code provider (either non-interactive `ANTHROPIC_API_KEY`
+  authentication, or the user's own Claude Pro/Max/Team/Enterprise
+  subscription login to the unmodified local Claude Code CLI; see §16)
 - Codex provider
 - task creation and lifecycle tracking
 - agent status
@@ -407,7 +409,16 @@ The following should NOT block v1:
 - billing/subscriptions
 - AgentCubicles-hosted AI models
 
-These may be considered for later versions.
+These may be considered for later versions. Claude Code execution must not
+start or continue when the required authentication (an `ANTHROPIC_API_KEY`,
+or a linked subscription login) is missing, invalid, or cannot be
+established. AgentCubicles itself reading, storing, or relaying a user's
+Claude OAuth credential or session token, and any general-purpose
+credential-vault functionality, remain explicitly out of scope for v1 —
+subscription-mode authentication is limited to the user's own direct sign-in
+through the unmodified Claude Code CLI. Public/commercial release of
+subscription-mode support requires a review of Anthropic's then-current
+terms before shipping.
 
 ## 17. Post-v1 Direction
 

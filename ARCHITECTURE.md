@@ -143,15 +143,21 @@ v1 — see §12 and §13.
 
 ## 3. Provider Abstraction: the Execution Contract
 
-**Design stance.** Nothing in the authoritative inputs establishes that
-Claude Code has a persistent process-backed run, a protocol
-handshake/readiness phase, a native session concept, an approval
-mechanism, an account/session compliance check, unit-scoped cancellation,
-or the same shutdown mechanics as Codex. `CODEX_INTEGRATION_REQUIREMENTS.md`
-documents all of those as *Codex-specific*, several explicitly marked
-UNVERIFIED EXTERNAL ASSUMPTIONS even for Codex itself. The contract below
-is the smallest thing every provider can safely be assumed to have, and
-everything else is an optional, per-execution capability.
+**Design stance.** `docs/verification/claude-code-provider-facts.md` has
+since verified, for the probed `claude -p` surface: Claude Code is
+process-backed (finding 2); it has no distinct protocol handshake/readiness
+phase before an authenticated turn begins, verified via subscription-login
+authentication (finding 2) and not yet separately verified for
+`ANTHROPIC_API_KEY` (a deferrable, non-blocking UNKNOWN); it has a native,
+disk-backed session concept (finding 5); and it has a real,
+machine-observable approval/permission-prompt mechanism (finding 9). An
+account/session compliance check, unit-scoped cancellation, and the same
+shutdown mechanics as Codex remain unestablished for Claude Code (§20).
+`CODEX_INTEGRATION_REQUIREMENTS.md` documents the Codex-specific items as
+*Codex-specific*, several explicitly marked UNVERIFIED EXTERNAL
+ASSUMPTIONS even for Codex itself. The contract below is the smallest
+thing every provider can safely be assumed to have, and everything else is
+an optional, per-execution capability.
 
 **Assumed universal (and why it is safe to assume) — genuinely true for
 every provider regardless of execution mode:**
@@ -172,11 +178,11 @@ every provider regardless of execution mode:**
 a universal assumption.** Whether any given provider is process-backed is
 never assumed; it is established independently from verified provider
 evidence (§19 step 4), per provider, before that provider's adapter is
-built. Both named v1 providers are *believed* to be CLI/process-backed,
-but no integration fact for Claude Code — including whether it is
-process-backed at all — has been verified anywhere in the authoritative
-inputs (§20), and even Codex's own invocation shape is an unverified
-assumption sourced only from a prior implementation's comments (§20).
+built. Both named v1 providers are *believed* to be CLI/process-backed;
+for Claude Code, this is **VERIFIED** for the probed `claude -p` surface
+(`docs/verification/claude-code-provider-facts.md` finding 2) — Codex's
+own invocation shape remains an unverified assumption sourced only from a
+prior implementation's comments (§20).
 **Process Supervisor participation (§4) applies only to an Execution
 whose verified execution mode is process-backed.** A verified non-process
 Execution instead uses the already-defined non-process lifecycle-evidence
@@ -391,14 +397,18 @@ an optional capability above — never assumed for any other provider. The
 current pilot's concrete eligibility rule (§5.2 of that document) is
 explicitly provisional policy, not something this architecture encodes.
 
-**Claude Code specifically:** no integration facts for Claude Code have
-been verified anywhere in the authoritative inputs. Nothing here should be
-read as implying Claude Code lacks sessions, approvals, a compliance
-concept, or even a process-backed execution mode — only that nothing
-establishes it has them either. This must be resolved by the verification
-step in the implementation sequence (§19) before Claude Code's adapter is
-built, exactly as Codex's facts must be independently re-verified before
-its adapter is built.
+**Claude Code specifically:** the verification step in the implementation
+sequence (§19, T01) has since established, for the probed `claude -p`
+surface: it is **process-backed** (`docs/verification/claude-code-
+provider-facts.md` finding 2); it has a native, disk-backed **session
+concept** (finding 5); it has no distinct handshake/readiness phase on the
+subscription-login path (finding 2), a deferrable UNKNOWN for the
+untested `ANTHROPIC_API_KEY` path; and it has a real, machine-observable
+**approval mechanism** (finding 9). The account/session **compliance
+concept** remains genuinely unestablished — nothing here should be read as
+implying Claude Code lacks one, only that nothing establishes it has one
+either — and is non-blocking for T01 only under the narrow exception
+recorded in §20, not because it has been resolved.
 
 **Contract stabilization.** The shared execution contract above stabilizes
 through one required sequence, never a shortcut through it: provider
@@ -625,6 +635,19 @@ the gap to Level 3 (OS sandboxing, a container boundary, a restricted
 execution environment) is a possible future investment, tracked as a
 deferred decision (§20), not a v1 claim.
 
+A Claude Code Execution running in subscription mode (§6) does not get a
+fresh, single-use isolated state root the way every other Execution does:
+its opaque persistent provider-auth profile is isolated from the user's
+real `~/.claude` but persists across Executions by design. This must be disclosed to the
+user as a named exception, not presented as identical to the fresh-per-
+Execution isolation every other mode provides. `--safe-mode` (§6) is
+hardening against customization-driven behavior, not an OS sandbox or a
+Level 3 guarantee: managed/policy-configured hooks, status line, and
+file-suggestion commands may still apply under it, even though
+policy-configured MCP servers, managed plugins, managed skills, and
+managed CLAUDE.md do not load — an explicit platform limitation, not a gap
+this document hides.
+
 ## 6. Environment / State Isolation Responsibility
 
 This section governs **process-backed** Executions — the OS child-process
@@ -676,6 +699,12 @@ below.**
   - an explicitly approved credential file/path — a specific, narrowly
     scoped file location, never a directory grant;
   - product-owned state — AgentCubicles's own state-root boundary, below;
+  - a **dedicated, persistent, AgentCubicles-owned opaque provider-auth
+    profile directory** (Claude Code subscription-mode authentication
+    only, below) — its provider-managed contents may include
+    configuration/state beyond the authentication credential itself;
+    AgentCubicles creates this directory and supplies its path, but
+    never reads, copies, parses, or relays its contents, at any time;
   - any other provider-specific input, only after a deliberate
     architecture/policy extension adds a new class — never granted ad hoc
     to satisfy one adapter's request.
@@ -717,6 +746,61 @@ below.**
 - **Validation and application of the adapter's isolation plan** (below)
   — the core is the enforcement point, not a passive pass-through.
 
+**Claude Code subscription-mode authentication (the opaque provider-auth
+profile class above).** This is an **opaque, persistent provider-auth
+profile**: its provider-managed contents may include configuration/state
+beyond the authentication credential itself, and AgentCubicles never
+reads, copies, parses, or relays any of it. Unlike every other state root
+in this section, it is **not** recreated fresh per Execution — it persists
+across Executions by design, one profile per project/workspace, and this is the
+one named exception to the fresh-per-Execution isolation rule stated
+elsewhere in this section (disclosed per §5's Honesty requirement). It is
+populated only through a one-time, user-driven interactive step, never
+through AgentCubicles supplying, injecting, or migrating credential
+material into it:
+
+- AgentCubicles creates an empty directory under its own state-root
+  boundary, one per project/workspace, and supplies its path via
+  `CLAUDE_CONFIG_DIR`.
+- AgentCubicles spawns the real, unmodified `claude` CLI's own interactive
+  login, with stdio surfaced directly to the user, pointed at that
+  directory. Sign-in completes entirely through Anthropic's own flow;
+  AgentCubicles never participates in, observes, or stores the credential
+  exchange itself. This one-time linking step is not a Work Item Execution.
+- **Login verification is credential-free.** Both immediately after linking
+  and before every later subscription-mode Execution, AgentCubicles checks
+  authentication state solely via `claude auth status`'s machine-readable
+  `loggedIn`/`authMethod` fields (`docs/verification/claude-code-provider-
+  facts.md` §6) — never by inspecting the opaque provider-auth profile
+  directory's contents.
+- Every later subscription-mode Execution for that project reuses this same
+  directory, never the user's real `~/.claude` — keeping it isolated from
+  the user's ambient state, other stored credentials, and every other
+  project's profile.
+- Every subscription-mode task Execution runs with `--safe-mode` and
+  `--no-session-persistence`. `--safe-mode` disables user/project-local
+  CLAUDE.md, skills, plugins, hooks, custom commands/agents, and MCP
+  servers for that Execution, and also stops policy-configured MCP
+  servers, managed plugins, managed skills, and managed CLAUDE.md from
+  loading; it is hardening, not an OS sandbox, and does not stop
+  managed/policy-configured hooks, status line, or file-suggestion
+  commands from still applying — an explicit, disclosed platform
+  limitation on a managed installation.
+- At most **one active subscription-mode Execution per profile** at a
+  time; concurrent use of the same profile is not supported in v1.
+- **Fail-closed gate.** Authentication is accepted only when
+  `claude auth status` reports `loggedIn: true` **and** `authMethod:
+  "claude.ai"` — the value **VERIFIED** in
+  `docs/verification/claude-code-provider-facts.md` finding 6 as what a
+  genuine subscription login actually reports. `loggedIn: false`, a
+  failed/malformed/timed-out status check, or `loggedIn: true` with any
+  other `authMethod` (including `"api_key"` or an unrecognized value) are
+  all the non-permissive outcome: the subscription-mode integration is
+  unavailable for that execution, never falling back to the user's real
+  `~/.claude` or a broader grant. A mid-task authentication failure after
+  a successful start is handled by §3's same fail-closed rule, not a
+  separate mechanism.
+
 **Each verified adapter declares (provider-specific, per adapter):**
 
 - An **isolation plan** built only from the explicitly supported classes
@@ -747,8 +831,13 @@ to every adapter. A surviving denylist-style check alone is never
 sufficient authorization. Whether a *given* provider's real authentication
 mechanism can be satisfied within these classes at all is exactly the kind
 of fact that must be independently verified per provider (§20, §19 step 4)
-before its adapter's isolation plan is written — this is not yet known for
-either Claude Code or Codex from the authoritative inputs.
+before its adapter's isolation plan is written. For Claude Code this is no
+longer unknown: `ANTHROPIC_API_KEY` is a verified supported path (§19 step
+4, `docs/verification/claude-code-provider-facts.md` §6), and subscription
+authentication is satisfied within the bounded opaque provider-auth
+profile class above, with the genuine-subscription `authMethod` value
+**VERIFIED** as `"claude.ai"` (finding 6). For Codex, this remains unknown
+from the authoritative inputs unless independently verified elsewhere.
 
 ## 7. Execution Ownership Model: Work Item, Execution, Session
 
@@ -1722,12 +1811,35 @@ exists, but is not sequenced here as it is not designed in this document.
 
 ## 20. Decisions Requiring External/Provider Verification
 
-- **No integration facts have been verified for Claude Code anywhere in
-  the authoritative inputs.** Whether it has a session concept, a
-  handshake/readiness phase, an approval mechanism, a compliance-style
-  check, or even a process-backed execution mode (§3) is unknown, not
-  merely "assumed absent" — §19 step 4 must establish this before its
-  adapter is built.
+- **Claude Code's process-backed execution mode, native session concept,
+  subscription-path handshake/readiness behavior, and approval mechanism
+  have been verified per §19 step 4** (T01;
+  `docs/verification/claude-code-provider-facts.md` findings 2, 5, 2/6,
+  and 9 respectively — see that document for exact scope and evidence).
+  The handshake/readiness finding is scoped to the subscription-login
+  path; the `ANTHROPIC_API_KEY` path's handshake/readiness behavior was
+  not separately tested and remains a deferrable, non-blocking UNKNOWN.
+  The account/session compliance-style check remains unknown, not merely
+  "assumed absent" — §19 step 4 must establish it before the adapter
+  relies on one existing, subject to the narrow exception below. **Narrow
+  exception for the compliance-style check
+  specifically:** if that sub-question remains unresolved after all
+  reasonably available compliant verification means are exhausted
+  (current official provider documentation, and first-party source
+  inspection where publicly available — excluding live-account behavioral
+  probing of a real credential), the Claude Code v1 adapter may still
+  proceed once (1) the compliance-concept existence question remains
+  explicitly recorded as UNKNOWN — never asserted as ABSENT — in
+  `docs/verification/claude-code-provider-facts.md`; (2) verified
+  request-level policy/eligibility failure behavior for Claude Code is
+  documented there; and (3) the adapter applies §3's fail-closed handling
+  to any ambiguous or unclassifiable provider outcome exactly as it would
+  for any other provider. This exception is scoped to the compliance-style
+  check sub-question alone, which remains the one open fact in this
+  bullet (subject to the deferrable `ANTHROPIC_API_KEY`-path
+  handshake/readiness UNKNOWN noted above, which is unaffected by this
+  exception and tracked separately). It does not weaken §3's general
+  capability or fail-closed rules, which continue to apply unchanged.
 - The Codex App Server's actual wire protocol — launch invocation,
   framing, method vocabulary, handshake order, and the Account/
   `GetAccountResponse`/`PlanType` shape — is marked **UNVERIFIED EXTERNAL
@@ -1743,7 +1855,25 @@ exists, but is not sequenced here as it is not designed in this document.
 - Each provider's actual, real authentication mechanism — needed to
   design a correct isolation plan (§6) that neither leaks unrelated host
   state nor accidentally breaks the provider's own login — is unverified
-  for both Claude Code and Codex and must be established in §19 step 4.
+  for Codex and must be established in §19 step 4. For Claude Code,
+  `PRODUCT_REQUIREMENTS.md` §15/§16 supports two v1 authentication paths:
+  non-interactive `ANTHROPIC_API_KEY` authentication (verified in
+  `docs/verification/claude-code-provider-facts.md` §6), and the user's
+  own Claude Pro/Max/Team/Enterprise subscription login to the unmodified
+  local Claude Code CLI through the dedicated, persistent, isolated opaque
+  provider-auth profile class in §6. OAuth/subscription authentication is no
+  longer categorically deferred from v1 — what remains out of scope is
+  AgentCubicles itself reading, storing, or relaying the OAuth credential,
+  or any general-purpose credential-vault functionality, per
+  `PRODUCT_REQUIREMENTS.md` §16. The `authMethod` value `claude auth
+  status` reports for a genuine subscription login is **VERIFIED** as
+  `"claude.ai"` (`docs/verification/claude-code-provider-facts.md`
+  finding 6), and the §6 fail-closed gate is defined in terms of it.
+  Whether an AgentCubicles-selected `CLAUDE_CONFIG_DIR`
+  used this way is consistent with Anthropic's current terms is not
+  confirmed by any official statement reviewed so far; public/commercial
+  release of this mode requires reviewing Anthropic's then-current terms
+  first, per `PRODUCT_REQUIREMENTS.md` §16.
 - Whether a Git-isolation approach (if either provider needs one, per
   `AC-CODEX-SEC-014`) fully closes every credential/identity vector, or
   only the ones a prior implementation's comments enumerate, is unverified
