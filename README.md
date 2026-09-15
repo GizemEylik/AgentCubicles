@@ -4,6 +4,12 @@ AgentCubicles is an independent Eylik Studio project building a
 provider-independent, security-first workspace for coordinating coding
 agents such as Claude Code and Codex from one place.
 
+![AgentCubicles Overview](docs/assets/agentcubicles-overview.png)
+
+AgentCubicles gives you one workspace to coordinate multiple coding agents
+across your local projects, with visibility and control over what each
+agent is doing.
+
 It is not another coding agent. It is intended to become the orchestration,
 security, and observability layer that sits around the coding agents you
 already use — so you stop manually juggling multiple agent terminals and
